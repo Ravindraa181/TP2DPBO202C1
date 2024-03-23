@@ -5,6 +5,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.sql.*;
 import java.util.ArrayList;
 
 public class Menu extends JFrame{
@@ -31,6 +32,7 @@ public class Menu extends JFrame{
     private int selectedIndex = -1;
     // list untuk menampung semua mahasiswa
     private ArrayList<Mahasiswa> listMahasiswa;
+    private Database database;
 
     private JPanel mainPanel;
     private JTextField nimField;
@@ -55,8 +57,10 @@ public class Menu extends JFrame{
         // inisialisasi listMahasiswa
         listMahasiswa = new ArrayList<>();
 
+        database = new Database();
+
         // isi listMahasiswa
-        populateList();
+//        populateList();
 
         // isi tabel mahasiswa
         mahasiswaTable.setModel((setTable()));
@@ -142,130 +146,178 @@ public class Menu extends JFrame{
 
         DefaultTableModel temp = new DefaultTableModel( null, column);
 
-        //isi tabel dengan ListMahasiswa
-        for (int i = 0; i < listMahasiswa.size(); i++) {
+        try {
+             ResultSet resultSet = database.selectQuery("SELECT * FROM mahasiswa");
 
-            Object[] row = new Object[6];
+            int i=0;
+            while (resultSet.next()) {
+                Object[] row = new Object[6];
 
-            row[0] = i + 1;
+                row[0] = i + 1;
 
-            row[1] = listMahasiswa.get(i).getNim();
+                row[1] = resultSet.getString("nim");
+                row[2] = resultSet.getString("nama");
+                row[3] = resultSet.getString("jenis_kelamin");
+                row[4] = resultSet.getString("bakatAneh");
+                row[5] = resultSet.getString("asalPlanet");
 
-            row[2] = listMahasiswa.get(i).getNama();
+//                row[2] = listMahasiswa.get(i).getNama();
+//
+//                row[3] = listMahasiswa.get(i).getJenisKelamin();
+//
+//                row[4] = listMahasiswa.get(i).getBakatAneh();
+//
+//                row[5] = listMahasiswa.get(i).getAsalPlanet();
 
-            row[3] = listMahasiswa.get(i).getJenisKelamin();
-
-            row[4] = listMahasiswa.get(i).getBakatAneh();
-
-            row[5] = listMahasiswa.get(i).getAsalPlanet();
-
-            temp.addRow(row);
+                temp.addRow(row);
+                i++;
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
         }
             return temp;
     }
 
     public void insertData() {
-        /// ambil value deri textfield dan combobox
-
+        // Ambil nilai dari form
         String nim = nimField.getText();
-
         String nama = namaField.getText();
-
         String jeniskelamin = jenisKelaminComboBox.getSelectedItem().toString();
-
         String bakataneh = bakatanehField.getText();
-
         String asalplanet = asalPlanetComboBox.getSelectedItem().toString();
 
+        // Periksa apakah ada input yang kosong
+        if (nim.isEmpty() || nama.isEmpty() || jeniskelamin.isEmpty() || bakataneh.isEmpty() || asalplanet.isEmpty()) {
+            JOptionPane.showMessageDialog(null, "Semua Input Harus Diisi Ya Sayang!", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
 
-        // tambahkan data ke dalam Lint
+        // Periksa apakah NIM sudah ada dalam database
+        try {
+            if (isNIMExists(nim)) {
+                JOptionPane.showMessageDialog(null, "NIM Yang Kamu Isi Sudah Ada Yang Pake:)!", "Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
 
-        listMahasiswa.add(new Mahasiswa (nim, nama, jeniskelamin, bakataneh, asalplanet));
+        try {
+            // Buat pernyataan SQL untuk menyisipkan data
+            String sql = "INSERT INTO mahasiswa (nim, nama, jenis_kelamin, bakatAneh, asalPlanet) VALUES ('" + nim + "', '" + nama + "', '" + jeniskelamin + "', '" + bakataneh + "', '" + asalplanet + "')";
 
-        // update tabel
-        mahasiswaTable.setModel(setTable());
+            // Eksekusi pernyataan SQL
+            int rowsInserted = database.getStatement().executeUpdate(sql);
 
-        // bersihkan form
-        clearForm();
+            // Periksa jika baris berhasil disisipkan
+            if (rowsInserted > 0) {
+                // Tambahkan baris baru ke model tabel di UI
+                DefaultTableModel model = (DefaultTableModel) mahasiswaTable.getModel();
+                model.addRow(new Object[]{model.getRowCount() + 1, nim, nama, jeniskelamin, bakataneh, asalplanet});
 
-        //feedback
-        System.out.println("Insert berhasil!");
-        JOptionPane.showMessageDialog( null,  "Data berhasil ditambahkan");
+                // Bersihkan form
+                clearForm();
 
-
+                // Feedback
+                JOptionPane.showMessageDialog(null, "Data berhasil ditambahkan!");
+            } else {
+                JOptionPane.showMessageDialog(null, "Gagal menambahkan data!");
+            }
+        } catch (SQLException e) {
+            // Tangani kesalahan SQL
+            JOptionPane.showMessageDialog(null, "Terjadi kesalahan saat menambahkan data: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     public void updateData() {
-        // ambil data dari form
+        // Ambil nilai dari form
         String nim = nimField.getText();
-
         String nama = namaField.getText();
-
         String jeniskelamin = jenisKelaminComboBox.getSelectedItem().toString();
-
         String bakataneh = bakatanehField.getText();
-
         String asalplanet = asalPlanetComboBox.getSelectedItem().toString();
 
+        // Periksa apakah ada input yang kosong
+        if (nim.isEmpty() || nama.isEmpty() || jeniskelamin.isEmpty() || bakataneh.isEmpty() || asalplanet.isEmpty()) {
+            JOptionPane.showMessageDialog(null, "Semua Harus Diisi Ya Sayang!", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
 
-        // ubah data mahasiswa di list
+        try {
+            // Buat pernyataan SQL untuk mengupdate data
+            String sql = "UPDATE mahasiswa SET nama = '" + nama + "', jenis_kelamin = '" + jeniskelamin + "', bakatAneh = '" + bakataneh + "', asalPlanet = '" + asalplanet + "' WHERE nim = '" + nim + "'";
 
-        listMahasiswa.get(selectedIndex).setNim(nim);
+            // Eksekusi pernyataan SQL
+            int rowsUpdated = database.getStatement().executeUpdate(sql);
 
-        listMahasiswa.get(selectedIndex).setNama(nama);
+            // Periksa jika baris berhasil diupdate
+            if (rowsUpdated > 0) {
+                // Update data pada model tabel di UI
+                DefaultTableModel model = (DefaultTableModel) mahasiswaTable.getModel();
+                model.setValueAt(nama, selectedIndex, 2);
+                model.setValueAt(jeniskelamin, selectedIndex, 3);
+                model.setValueAt(bakataneh, selectedIndex, 4);
+                model.setValueAt(asalplanet, selectedIndex, 5);
 
-        listMahasiswa.get(selectedIndex).setJenisKelamin(jeniskelamin);
+                // Bersihkan form
+                clearForm();
 
-        listMahasiswa.get(selectedIndex).setBakatAneh(bakataneh);
-
-        listMahasiswa.get(selectedIndex).setAsalplanet(asalplanet);
-
-        // update tabel
-        mahasiswaTable.setModel(setTable());
-
-        // bersinkan form
-        clearForm();
-
-        // feedback
-        System.out.println("Update Berhasil!");
-        JOptionPane.showMessageDialog( null,  "Data berhasil diubah!");
-
-
+                // Feedback
+                JOptionPane.showMessageDialog(null, "Data berhasil diupdate!");
+            } else {
+                JOptionPane.showMessageDialog(null, "Gagal mengupdate data!");
+            }
+        } catch (SQLException e) {
+            // Tangani kesalahan SQL
+            JOptionPane.showMessageDialog(null, "Terjadi kesalahan saat mengupdate data: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
-//    public void deleteData() {
-//        // hapus data dari list
-//        listMahasiswa.remove((selectedIndex));
-//
-//        // update tabel
-//        mahasiswaTable.setModel(setTable());
-//
-//        // bersihkan form
-//        clearForm();
-//
-//        // feedback
-//        System.out.println("Delete Berhasil!");
-//        JOptionPane.showMessageDialog( null,  "Data berhasil diubah!");
-//
-//    }
+    // Fungsi untuk memeriksa apakah NIM sudah ada dalam database
+    private boolean isNIMExists(String nim) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM mahasiswa WHERE nim = '" + nim + "'";
+        ResultSet resultSet = database.getStatement().executeQuery(sql);
+        resultSet.next();
+        return resultSet.getInt(1) > 0;
+    }
+
 
     public void deleteData() {
         int choice = JOptionPane.showConfirmDialog(null, "Apakah Anda yakin ingin menghapus data ini?", "Konfirmasi", JOptionPane.YES_NO_OPTION);
 
         if (choice == JOptionPane.YES_OPTION) {
-            // hapus data dari list
-            listMahasiswa.remove(selectedIndex);
+            try {
+                // Ambil NIM dari baris terpilih
+                String nim = mahasiswaTable.getModel().getValueAt(selectedIndex, 1).toString();
 
-            // update tabel
-            mahasiswaTable.setModel(setTable());
+                // Buat pernyataan SQL untuk menghapus data berdasarkan NIM
+                String sql = "DELETE FROM mahasiswa WHERE nim = '" + nim + "'";
 
-            // bersihkan form
-            clearForm();
+                // Eksekusi pernyataan SQL
+                int rowsDeleted = database.getStatement().executeUpdate(sql);
 
-            // feedback
-            JOptionPane.showMessageDialog(null, "Data berhasil dihapus!");
+                // Periksa jika baris berhasil dihapus
+                if (rowsDeleted > 0) {
+                    // Hapus baris dari model tabel di UI
+                    DefaultTableModel model = (DefaultTableModel) mahasiswaTable.getModel();
+                    model.removeRow(selectedIndex);
+
+                    // Bersihkan form
+                    clearForm();
+
+                    // Feedback
+                    JOptionPane.showMessageDialog(null, "Data berhasil dihapus!");
+                } else {
+                    JOptionPane.showMessageDialog(null, "Gagal menghapus data!");
+                }
+            } catch (SQLException e) {
+                // Tangani kesalahan SQL
+                JOptionPane.showMessageDialog(null, "Terjadi kesalahan saat menghapus data: " + e.getMessage());
+            }
         }
     }
+
+
 
 
     public void clearForm() {
